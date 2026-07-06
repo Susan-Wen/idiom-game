@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🐉 暑假成语接龙大冒险</title>
+<style>
+:root {
+  --bg: #fff8e7;
+  --primary: #ff6b35;
+  --secondary: #4ecdc4;
+  --accent: #ffe66d;
+  --success: #2ecc71;
+  --text: #2c3e50;
+  --card: #ffffff;
+  --locked: #e0e0e0;
+  --shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'PingFang SC','Microsoft YaHei',sans-serif;
+  background: var(--bg);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+body::before {
+  content: '';
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: 
+    radial-gradient(circle at 10% 20%, rgba(255,107,53,0.05) 0%, transparent 50%),
+    radial-gradient(circle at 90% 80%, rgba(78,205,196,0.05) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.header {
+  background: linear-gradient(135deg, #ff6b35, #ff8e53);
+  color: white;
+  padding: 20px 16px;
+  text-align: center;
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 4px 20px rgba(255,107,53,0.3);
+}
+.header .dragon { font-size: 40px; display: inline-block; animation: dragonBounce 2s infinite; }
+@keyframes dragonBounce {
+  0%,100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+.header h1 { font-size: 26px; margin: 5px 0; letter-spacing: 2px; }
+.header .sub { font-size: 14px; opacity: 0.9; }
+
+.progress-wrap {
+  max-width: 600px;
+  margin: 10px auto 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.progress-bar {
+  flex: 1;
+  height: 10px;
+  background: rgba(255,255,255,0.3);
+  border-radius: 5px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 5px;
+  transition: width 0.5s ease;
+}
+.progress-text {
+  font-size: 13px;
+  font-weight: bold;
+  min-width: 55px;
+  text-align: right;
+}
+
+.container { max-width: 800px; margin: 0 auto; padding: 16px; position: relative; z-index: 1; }
+
+/* Tabs */
+.tabs { display: flex; gap: 6px; margin-bottom: 16px; }
+.tab {
+  flex: 1;
+  padding: 12px 8px;
+  border: none;
+  border-radius: 14px;
+  font-size: 15px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s;
+  text-align: center;
+  background: var(--card);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+.tab.active {
+  background: var(--primary);
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255,107,53,0.3);
+}
+.tab:hover:not(.active) { transform: translateY(-1px); }
+
+/* Calendar */
+.calendar { display: none; }
+.calendar.show { display: block; }
+.week-label {
+  font-size: 12px;
+  color: #999;
+  padding: 8px 4px 4px;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+.month-label {
+  font-size: 16px;
+  font-weight: bold;
+  color: var(--primary);
+  padding: 12px 0 6px;
+  margin-top: 8px;
+  border-top: 2px dashed #eee;
+}
+.day-grid { display: grid; grid-template-columns: repeat(5,1fr); gap: 8px; margin-bottom: 8px; }
+.day-cell {
+  aspect-ratio: 1;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-weight: bold;
+  transition: all 0.3s;
+  position: relative;
+  background: var(--card);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  border: 2px solid transparent;
+}
+.day-cell .date-num { font-size: 18px; line-height: 1; }
+.day-cell .day-name { font-size: 10px; color: #999; margin-top: 2px; }
+.day-cell .status-icon { font-size: 14px; margin-top: 2px; }
+.day-cell:hover:not(.locked):not(.today) { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(0,0,0,0.12); }
+.day-cell.locked { 
+  background: repeating-linear-gradient(45deg, #f5f5f5, #f5f5f5 4px, #ebebeb 4px, #ebebeb 8px);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.day-cell.locked .date-num { color: #bbb; }
+.day-cell.completed { background: #e8f5e9; border-color: var(--success); }
+.day-cell.today { background: #fff3e0; border-color: var(--primary); animation: todayPulse 2s infinite; }
+@keyframes todayPulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(255,107,53,0.3); }
+  50% { box-shadow: 0 0 0 10px rgba(255,107,53,0); }
+}
+.day-cell.weekend-makeup { background: #ffe0b2; border-color: #ff9800; }
+.day-cell.weekend-makeup .date-num { color: #e65100; }
+
+/* Main chain display */
+.main-section { display: none; }
+.main-section.show { display: block; }
+.day-title {
+  text-align: center;
+  font-size: 20px;
+  font-weight: bold;
+  color: var(--primary);
+  margin: 20px 0 16px;
+  padding: 8px;
+  background: var(--card);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+}
+.chain-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 8px 0;
+}
+.idiom-card {
+  width: 100%;
+  max-width: 360px;
+  background: var(--card);
+  border-radius: 20px;
+  padding: 30px 24px;
+  text-align: center;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.1);
+  cursor: pointer;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  position: relative;
+  overflow: hidden;
+  user-select: none;
+}
+.idiom-card:hover { transform: scale(1.03); }
+.idiom-card.revealed {
+  animation: cardReveal 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+@keyframes cardReveal {
+  0% { transform: scale(0.3) rotateY(90deg); opacity: 0; }
+  60% { transform: scale(1.05) rotateY(0deg); opacity: 1; }
+  100% { transform: scale(1) rotateY(0deg); }
+}
+.idiom-card .num-badge {
+  position: absolute;
+  top: 10px;
+  left: 14px;
+  background: var(--primary);
+  color: white;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.idiom-card .idiom-text {
+  font-size: 36px;
+  font-weight: bold;
+  color: var(--text);
+  margin: 10px 0;
+  letter-spacing: 3px;
+}
+.idiom-card .idiom-pinyin {
+  font-size: 16px;
+  color: #888;
+  margin-bottom: 12px;
+  font-style: italic;
+}
+.idiom-card .idiom-expl {
+  font-size: 15px;
+  color: #666;
+  line-height: 1.5;
+  padding: 0 10px;
+}
+.idiom-card .tap-hint {
+  font-size: 12px;
+  color: #ccc;
+  margin-top: 12px;
+  animation: blinkHint 1.5s infinite;
+}
+@keyframes blinkHint {
+  0%,100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
+.arrow-down {
+  font-size: 28px;
+  color: var(--secondary);
+  animation: arrowBounce 1.5s infinite;
+}
+@keyframes arrowBounce {
+  0%,100% { transform: translateY(0); }
+  50% { transform: translateY(6px); }
+}
+.arrow-down.hidden { visibility: hidden; }
+
+.chain-controls {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.btn {
+  padding: 12px 28px;
+  border: none;
+  border-radius: 30px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s;
+  letter-spacing: 1px;
+}
+.btn-primary { background: var(--primary); color: white; box-shadow: 0 4px 15px rgba(255,107,53,0.3); }
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(255,107,53,0.4); }
+.btn-secondary { background: var(--secondary); color: white; }
+.btn-outline { background: white; color: var(--primary); border: 2px solid var(--primary); }
+
+.completion-msg {
+  text-align: center;
+  padding: 20px;
+  background: #e8f5e9;
+  border-radius: 14px;
+  margin: 10px 0;
+  animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+@keyframes popIn {
+  0% { transform: scale(0.5); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.completion-msg .emoji { font-size: 40px; display: block; margin-bottom: 8px; }
+.completion-msg .msg { font-size: 16px; font-weight: bold; color: var(--success); }
+
+/* Confetti */
+.confetti-container {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 9999;
+}
+.confetti {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  animation: confettiFall 1.5s ease-out forwards;
+}
+@keyframes confettiFall {
+  0% { transform: translateY(-100px) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #999;
+}
+.empty-state .big-emoji { font-size: 60px; display: block; margin-bottom: 16px; }
+.empty-state p { font-size: 16px; line-height: 1.6; }
+
+/* Responsive */
+@media (max-width: 480px) {
+  .header h1 { font-size: 22px; }
+  .day-grid { gap: 5px; }
+  .day-cell { border-radius: 10px; }
+  .day-cell .date-num { font-size: 15px; }
+  .idiom-card { padding: 20px 16px; }
+  .idiom-card .idiom-text { font-size: 28px; }
+}
+
+/* Weekend banner */
+.weekend-banner {
+  background: linear-gradient(135deg, #ffe0b2, #ffcc80);
+  border-radius: 14px;
+  padding: 12px 16px;
+  text-align: center;
+  font-weight: bold;
+  color: #e65100;
+  margin-bottom: 12px;
+  display: none;
+  animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.weekend-banner.show { display: block; }
+
+/* Story section */
+.idiom-story {
+  background: #fef9e7;
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-top: 10px;
+  font-size: 14px;
+  color: #7d6608;
+  line-height: 1.7;
+  display: none;
+  animation: fadeSlide 0.3s ease;
+}
+.idiom-story.show { display: block; }
+.idiom-story .story-label { font-weight: bold; color: #e67e22; margin-right: 4px; }
+@keyframes fadeSlide {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Story toggle & TTS buttons row */
+.idiom-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.idiom-actions .mini-btn {
+  background: #f0f0f0;
+  border: none;
+  border-radius: 20px;
+  padding: 6px 16px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #666;
+}
+.idiom-actions .mini-btn:hover { background: #e0e0e0; transform: scale(1.05); }
+.idiom-actions .mini-btn.speaking {
+  background: #4ecdc4;
+  color: white;
+  animation: pulse 0.8s infinite;
+}
+@keyframes pulse {
+  0%,100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+/* TTS global bar */
+.tts-bar {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin: 16px 0 4px;
+  flex-wrap: wrap;
+}
+.tts-bar .tts-main-btn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 30px;
+  font-size: 15px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s;
+  background: linear-gradient(135deg, #a29bfe, #6c5ce7);
+  color: white;
+  box-shadow: 0 4px 15px rgba(108,92,231,0.3);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.tts-bar .tts-main-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(108,92,231,0.4); }
+.tts-bar .tts-main-btn.playing { background: #e17055; }
+
+/* Story hint in card */
+.story-hint {
+  display: inline-block;
+  font-size: 12px;
+  color: #e67e22;
+  margin-top: 4px;
+  cursor: pointer;
+  text-decoration: underline dotted;
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <span class="dragon">🐉</span>
+  <h1>暑假成语接龙大冒险</h1>
+  <p class="sub">2026年7月6日 — 8月28日 · 每周一至周五 · 每天4个成语</p>
+  <div class="progress-wrap">
+    <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    <span class="progress-text" id="progressText">0/40天</span>
+  </div>
+</div>
+
+<div class="container">
+  <div class="tabs">
+    <button class="tab active" data-tab="calendar">📅 日历</button>
+    <button class="tab" data-tab="learn">📖 学成语</button>
+  </div>
+
+  <div class="weekend-banner" id="weekendBanner">
+    🎉 今天是周末！你可以补学之前漏掉的课程哦～
+  </div>
+
+  <!-- Calendar View -->
+  <div class="calendar show" id="calendarView"></div>
+
+  <!-- Learning View -->
+  <div class="main-section" id="learnView">
+    <div class="day-title" id="dayTitle">请从日历选择一个日期开始</div>
+    <div class="empty-state" id="emptyState">
+      <span class="big-emoji">📅</span>
+      <p>点击上方的日历<br>选择今天的日期开始学习吧！</p>
+      <p style="font-size:13px;color:#ccc;margin-top:8px;">新的一天等你去发现哦 ✨</p>
+    </div>
+    <div id="chainDisplay" style="display:none;"></div>
+  </div>
+</div>
+
+<div class="confetti-container" id="confettiContainer"></div>
+
+<script>
+// ============================================================
+// DATA
+// ============================================================
+const IDIOM_CHAINS = [[{"text": "扬长而去", "pinyin": "yáng cháng ér qù", "explanation": "大大方方走掉", "first": "扬", "last": "去", "story": "大公鸡打败对手后，昂头挺胸大摇大摆地走了。形容很得意地离开。"}, {"text": "去粗取精", "pinyin": "qù cū qǔ jīng", "explanation": "去掉差的留下好的", "first": "去", "last": "精", "story": "挑豆子时把坏的捡走留下好的。去掉粗糙的，留下精华的部分。"}, {"text": "井井有条", "pinyin": "jǐng jǐng yǒu tiáo", "explanation": "收拾得整整齐齐", "first": "井", "last": "条", "story": "小蜜蜂的蜂巢一格一格整整齐齐，做什么事都很有条理。"}, {"text": "条理分明", "pinyin": "tiáo lǐ fēn míng", "explanation": "很有条理很清楚", "first": "条", "last": "明", "story": "妈妈把衣服按颜色叠好，红的一摞蓝的一摞，一看就清楚。"}], [{"text": "明察秋毫", "pinyin": "míng chá qiū háo", "explanation": "连很细的东西都能看清", "first": "明", "last": "毫", "story": "秋天鸟身上新长的细毛都能看清。观察力极强什么细节都不放过。"}, {"text": "毫不在意", "pinyin": "háo bù zài yì", "explanation": "一点也不在乎", "first": "毫", "last": "意", "story": "别人说什么他都毫不在意。完全不放在心上。"}, {"text": "一见如故", "pinyin": "yī jiàn rú gù", "explanation": "第一次见面就像老朋友", "first": "一", "last": "故", "story": "第一次见面就像老朋友一样。很投缘。"}, {"text": "古往今来", "pinyin": "gǔ wǎng jīn lái", "explanation": "从古时候到现在", "first": "古", "last": "来", "story": "从古到今月亮一直在天上。从古代到现在。"}], [{"text": "来历不明", "pinyin": "lái lì bù míng", "explanation": "不知道从哪来的", "first": "来", "last": "明", "story": "这东西哪里来的搞不清楚。来源不清楚。"}, {"text": "名不虚传", "pinyin": "míng bù xū chuán", "explanation": "名气不是白来的", "first": "名", "last": "传", "story": "听说这家包子好吃，一尝果然是真的。名气不是吹出来的。"}, {"text": "川流不息", "pinyin": "chuān liú bù xī", "explanation": "像河水流个不停", "first": "川", "last": "息", "story": "马路上的车像河水一样不停流动。人来人往没有停歇。"}, {"text": "细水长流", "pinyin": "xì shuǐ cháng liú", "explanation": "慢慢地持续不断", "first": "细", "last": "流", "story": "每天存一块钱细水长流。慢慢来长久坚持。"}], [{"text": "柳暗花明", "pinyin": "liǔ àn huā míng", "explanation": "困难后看到了希望", "first": "柳", "last": "明", "story": "陆游走着走着柳暗花明。在困难中看到新的希望。"}, {"text": "名正言顺", "pinyin": "míng zhèng yán shùn", "explanation": "名分正说话有理", "first": "名", "last": "顺", "story": "名分正当说起来就顺理成章。道理上说得通。"}, {"text": "顺其自然", "pinyin": "shùn qí zì rán", "explanation": "顺着事情自然发展", "first": "顺", "last": "然", "story": "花开花谢顺其自然。顺着事物本来的规律走。"}, {"text": "染旧作新", "pinyin": "rǎn jiù zuò xīn", "explanation": "把旧的变成新的", "first": "染", "last": "新", "story": "把旧的染上颜色变新的。在旧的上面做出改进。"}], [{"text": "心满意足", "pinyin": "xīn mǎn yì zú", "explanation": "很满意很满足", "first": "心", "last": "足", "story": "吃完冰淇淋心满意足地笑了。心里很满足。"}, {"text": "足智多谋", "pinyin": "zú zhì duō móu", "explanation": "很聪明办法多", "first": "足", "last": "谋", "story": "诸葛亮总能想出好办法，智慧和计谋都很充足。"}, {"text": "谋事在人", "pinyin": "móu shì zài rén", "explanation": "事情靠人想办法", "first": "谋", "last": "人", "story": "事情能不能成，关键看人努力不努力。"}, {"text": "任劳任怨", "pinyin": "rèn láo rèn yuàn", "explanation": "不怕辛苦不怕埋怨", "first": "任", "last": "怨", "story": "妈妈任劳任怨照顾一家人。不怕辛苦不抱怨。"}], [{"text": "怨天尤人", "pinyin": "yuàn tiān yóu rén", "explanation": "抱怨这个抱怨那个", "first": "怨", "last": "人", "story": "考不好不要怨天尤人。怪天怪地怪别人。"}, {"text": "人见人爱", "pinyin": "rén jiàn rén ài", "explanation": "谁见了都喜欢", "first": "人", "last": "爱", "story": "小熊猫人见人爱。谁看了都喜欢。"}, {"text": "爱不释手", "pinyin": "ài bù shì shǒu", "explanation": "喜欢得舍不得放手", "first": "爱", "last": "手", "story": "抱着新玩具爱不释手。喜欢到舍不得放下。"}, {"text": "手舞足蹈", "pinyin": "shǒu wǔ zú dǎo", "explanation": "高兴得又跳又摆手", "first": "手", "last": "蹈", "story": "高兴得手脚一起舞动。开心到停不下来。"}], [{"text": "道高一尺", "pinyin": "dào gāo yī chǐ", "explanation": "道理更高一筹", "first": "道", "last": "尺", "story": "道法高一尺。正派的力量高一尺。"}, {"text": "持之以恒", "pinyin": "chí zhī yǐ héng", "explanation": "一直坚持下去", "first": "持", "last": "恒", "story": "每天练字持之以恒就能写好。长期坚持不松懈。"}, {"text": "横冲直撞", "pinyin": "héng chōng zhí zhuàng", "explanation": "不顾一切向前冲", "first": "横", "last": "撞", "story": "小犀牛在草丛里横冲直撞。毫无顾忌地乱跑乱撞。"}, {"text": "壮志凌云", "pinyin": "zhuàng zhì líng yún", "explanation": "志向很高很远大", "first": "壮", "last": "云", "story": "岳飞小时候就有精忠报国的远大志向。志气高到冲上云霄。"}], [{"text": "云开雾散", "pinyin": "yún kāi wù sàn", "explanation": "乌云散开天放晴了", "first": "云", "last": "散", "story": "太阳出来云开雾散。困难过去了重见光明。"}, {"text": "散兵游勇", "pinyin": "sǎn bīng yóu yǒng", "explanation": "零散的没有组织", "first": "散", "last": "勇", "story": "到处游荡没有组织的兵。没有组织的散落人员。"}, {"text": "用心良苦", "pinyin": "yòng xīn liáng kǔ", "explanation": "费了很多心思", "first": "用", "last": "苦", "story": "费了很多心思很不容易。煞费苦心。"}, {"text": "苦尽甘来", "pinyin": "kǔ jìn gān lái", "explanation": "苦日子过了好日子来", "first": "苦", "last": "来", "story": "喝完了苦药吃了颗糖。艰难的日子过去了好日子来了。"}], [{"text": "来之不易", "pinyin": "lái zhī bù yì", "explanation": "得到它很不容易", "first": "来", "last": "易", "story": "这碗饭来之不易。得到它不容易要珍惜。"}, {"text": "一目十行", "pinyin": "yī mù shí háng", "explanation": "一眼看十行，很快", "first": "一", "last": "行", "story": "看书超快一眼看十行。形容读书速度很快。"}, {"text": "行云流水", "pinyin": "xíng yún liú shuǐ", "explanation": "流畅自然", "first": "行", "last": "水", "story": "书法像云在飘水在流一样自然流畅。非常自然不做作。"}, {"text": "水滴石穿", "pinyin": "shuǐ dī shí chuān", "explanation": "水一直滴能穿石头", "first": "水", "last": "穿", "story": "屋檐滴水慢慢把石头都滴穿了。坚持就能成功。"}], [{"text": "传为佳话", "pinyin": "chuán wéi jiā huà", "explanation": "被大家当作美谈传播", "first": "传", "last": "话", "story": "孔融让梨的故事一直流传，成了人人称赞的美谈。"}, {"text": "花言巧语", "pinyin": "huā yán qiǎo yǔ", "explanation": "说好听的话但不是真心的", "first": "花", "last": "语", "story": "狐狸用漂亮话骗乌鸦嘴里的肉。说的话好听但不真实。"}, {"text": "鱼目混珠", "pinyin": "yú mù hùn zhū", "explanation": "假的混在真的里面", "first": "鱼", "last": "珠", "story": "用鱼眼睛冒充珍珠。拿假货充当真货。"}, {"text": "珠光宝气", "pinyin": "zhū guāng bǎo qì", "explanation": "珠宝宝石闪闪亮", "first": "珠", "last": "气", "story": "皇宫里珍珠宝石闪闪发光。装饰华丽贵气。"}], [{"text": "齐心协力", "pinyin": "qí xīn xié lì", "explanation": "大家一条心一起用力", "first": "齐", "last": "力", "story": "拔河要齐心协力。大家心往一处想劲往一处使。"}, {"text": "利人利己", "pinyin": "lì rén lì jǐ", "explanation": "对别人好也对自己好", "first": "利", "last": "己", "story": "帮同学讲题自己也复习了。对别人好对自己也好。"}, {"text": "己所不欲", "pinyin": "jǐ suǒ bù yù", "explanation": "自己不要的别给别人", "first": "己", "last": "欲", "story": "自己不喜欢的事不要强加到别人身上。孔子说的。"}, {"text": "语重心长", "pinyin": "yǔ zhòng xīn cháng", "explanation": "话很有分量用心良苦", "first": "语", "last": "长", "story": "奶奶拉着你的手慢慢说大道理。话很恳切心意很深。"}], [{"text": "长命百岁", "pinyin": "cháng mìng bǎi suì", "explanation": "活得很长很健康", "first": "长", "last": "岁", "story": "祝爷爷奶奶长命百岁。健康长寿。"}, {"text": "岁月如梭", "pinyin": "suì yuè rú suō", "explanation": "时间过得飞快", "first": "岁", "last": "梭", "story": "光阴像织布的梭子一样飞快。时间过得很快。"}, {"text": "缩手缩脚", "pinyin": "suō shǒu suō jiǎo", "explanation": "做事不敢放开手脚", "first": "缩", "last": "脚", "story": "冬天太冷缩手缩脚。不敢放开胆子做事。"}, {"text": "交头接耳", "pinyin": "jiāo tóu jiē ěr", "explanation": "凑在一起说悄悄话", "first": "交", "last": "耳", "story": "上课时两个同学凑在一起悄悄说话。"}], [{"text": "二话不说", "pinyin": "èr huà bù shuō", "explanation": "什么都不说，马上就干", "first": "二", "last": "说", "story": "妈妈喊吃饭二话不说就跑过去。一句话不说就去做。"}, {"text": "说一不二", "pinyin": "shuō yī bù èr", "explanation": "说了不改变", "first": "说", "last": "二", "story": "爸爸说一不二答应的一定做到。说话算数。"}, {"text": "耳聪目明", "pinyin": "ěr cōng mù míng", "explanation": "耳朵灵眼睛亮", "first": "耳", "last": "明", "story": "耳朵灵眼睛亮。头脑清醒反应快。"}, {"text": "明明白白", "pinyin": "míng míng bái bái", "explanation": "清清楚楚没有模糊", "first": "明", "last": "白", "story": "水晶一样透亮，什么事都清清楚楚，一点不含糊。"}], [{"text": "百发百中", "pinyin": "bǎi fā bǎi zhòng", "explanation": "每次都打中", "first": "百", "last": "中", "story": "后羿射箭百发百中。每次都能击中目标。"}, {"text": "众志成城", "pinyin": "zhòng zhì chéng chéng", "explanation": "大家一条心力量大", "first": "众", "last": "城", "story": "蚂蚁们一起搬树叶众志成城。大家齐心力量大。"}, {"text": "成家立业", "pinyin": "chéng jiā lì yè", "explanation": "组建家庭做事业", "first": "成", "last": "业", "story": "爸爸年轻时成家立业。结婚有了家还有了工作。"}, {"text": "业精于勤", "pinyin": "yè jīng yú qín", "explanation": "本事靠勤奋来", "first": "业", "last": "勤", "story": "韩愈说学业精深在于勤奋。要学好就要勤快。"}], [{"text": "勤学好问", "pinyin": "qín xué hǎo wèn", "explanation": "勤学爱问问题", "first": "勤", "last": "问", "story": "孔子勤学好问什么都要弄明白。勤奋学习喜欢提问。"}, {"text": "文质彬彬", "pinyin": "wén zhì bīn bīn", "explanation": "既有文采又有礼貌", "first": "文", "last": "彬", "story": "一个文质彬彬戴着眼镜的读书人。文雅有礼貌。"}, {"text": "彬彬有礼", "pinyin": "bīn bīn yǒu lǐ", "explanation": "很有礼貌的样子", "first": "彬", "last": "礼", "story": "小朋友见到长辈彬彬有礼地鞠躬。很有礼貌的样子。"}, {"text": "力所能及", "pinyin": "lì suǒ néng jí", "explanation": "能够做到的", "first": "力", "last": "及", "story": "小朋友能做家务就是力所能及。自己能力可以做得到的。"}], [{"text": "急中生智", "pinyin": "jí zhōng shēng zhì", "explanation": "紧急时想出办法", "first": "急", "last": "智", "story": "司马光砸缸救人是急中生智。紧急时想出好办法。"}, {"text": "志同道合", "pinyin": "zhì tóng dào hé", "explanation": "想法一样的人", "first": "志", "last": "合", "story": "两个好朋友志同道合。志向相同意见一致。"}, {"text": "合情合理", "pinyin": "hé qíng hé lǐ", "explanation": "符合人情道理", "first": "合", "last": "理", "story": "价格不高也不低刚刚好。合乎人情道理。"}, {"text": "力争上游", "pinyin": "lì zhēng shàng yóu", "explanation": "努力做到最好", "first": "力", "last": "游", "story": "划龙舟拼命争前面的位置。努力争取最好的成绩。"}], [{"text": "有始有终", "pinyin": "yǒu shǐ yǒu zhōng", "explanation": "有开头也有结尾", "first": "有", "last": "终", "story": "做事要有始有终。开头结尾都做好。"}, {"text": "众望所归", "pinyin": "zhòng wàng suǒ guī", "explanation": "大家都希望他来", "first": "众", "last": "归", "story": "全班都选他当班长。大家的期望都落在一个人身上。"}, {"text": "归心似箭", "pinyin": "guī xīn sì jiàn", "explanation": "想回家心像箭一样快", "first": "归", "last": "箭", "story": "放假了恨不得插上翅膀飞回家。想回家的心像箭一样快。"}, {"text": "见多识广", "pinyin": "jiàn duō shí guǎng", "explanation": "见过的东西多懂得多", "first": "见", "last": "广", "story": "徐霞客走遍天下见识特别广。看的多懂的多。"}], [{"text": "光芒万丈", "pinyin": "guāng máng wàn zhàng", "explanation": "光线很强很耀眼", "first": "光", "last": "丈", "story": "太阳出来光芒万丈。光线特别强特别耀眼。"}, {"text": "张口结舌", "pinyin": "zhāng kǒu jié shé", "explanation": "张着嘴说不出话", "first": "张", "last": "舌", "story": "被老师一问张口结舌说不出话。张着嘴说不出话。"}, {"text": "舌战群儒", "pinyin": "shé zhàn qún rú", "explanation": "一个人和很多人辩论", "first": "舌", "last": "儒", "story": "诸葛亮过江东舌战群儒。一个人跟很多人辩论。"}, {"text": "入乡随俗", "pinyin": "rù xiāng suí sú", "explanation": "到了哪就按哪的习惯来", "first": "入", "last": "俗", "story": "到了一个地方就按当地的风俗习惯来。到一个新环境就适应那里的规矩。"}], [{"text": "俗不可耐", "pinyin": "sú bù kě nài", "explanation": "太俗了让人受不了", "first": "俗", "last": "耐", "story": "俗气到让人受不了。太庸俗了。"}, {"text": "耐人寻味", "pinyin": "nài rén xún wèi", "explanation": "值得好好想想回味", "first": "耐", "last": "味", "story": "这话经得起反复琢磨。意味深长值得细想。"}, {"text": "味同嚼蜡", "pinyin": "wèi tóng jiáo là", "explanation": "没味道像咬蜡一样", "first": "味", "last": "蜡", "story": "这道菜一点味道都没有。像嚼蜡烛一样没滋味。"}, {"text": "蜡炬成灰", "pinyin": "là jù chéng huī", "explanation": "蜡烛烧成了灰", "first": "蜡", "last": "灰", "story": "蜡烛燃烧自己直到变成灰。奉献到最后一刻。"}], [{"text": "挥洒自如", "pinyin": "huī sǎ zì rú", "explanation": "动作很自然很流畅", "first": "挥", "last": "如", "story": "书法家写字挥洒自如。动作流畅不受拘束。"}, {"text": "如鱼得水", "pinyin": "rú yú dé shuǐ", "explanation": "到了最适合的地方", "first": "如", "last": "水", "story": "小明到了图书馆如鱼得水。在最适合的环境里。"}, {"text": "水到渠成", "pinyin": "shuǐ dào qú chéng", "explanation": "条件成熟自然成功", "first": "水", "last": "成", "story": "水一流过来，沟渠自然就形成了。条件够了，事情自然能成。"}, {"text": "成人之美", "pinyin": "chéng rén zhī měi", "explanation": "帮别人完成好事", "first": "成", "last": "美", "story": "帮好朋友实现愿望就是成人之美。成全别人的好事。"}], [{"text": "眉开眼笑", "pinyin": "méi kāi yǎn xiào", "explanation": "眉毛弯弯很开心", "first": "眉", "last": "笑", "story": "收到礼物后眉开眼笑。眉毛舒展眼睛笑眯眯。"}, {"text": "小心谨慎", "pinyin": "xiǎo xīn jǐn shèn", "explanation": "很小心很仔细", "first": "小", "last": "慎", "story": "过马路要小心谨慎。非常当心一点都不大意。"}, {"text": "神气活现", "pinyin": "shén qì huó xiàn", "explanation": "精神抖擞很自信", "first": "神", "last": "现", "story": "小公鸡觉得自己最漂亮神气活现。很得意很精神。"}, {"text": "现身说法", "pinyin": "xiàn shēn shuō fǎ", "explanation": "用自己的经历讲道理", "first": "现", "last": "法", "story": "自己经历过的事讲出来给大家听，更有说服力。"}], [{"text": "发扬光大", "pinyin": "fā yáng guāng dà", "explanation": "让好的传下去做得更好", "first": "发", "last": "大", "story": "把好的传统继续发展让它更光更大。把优良传统传下去。"}, {"text": "打抱不平", "pinyin": "dǎ bào bù píng", "explanation": "看到不公就站出来", "first": "打", "last": "平", "story": "看到有人欺负弱小就上去打抱不平。帮助受欺负的人。"}, {"text": "平易近人", "pinyin": "píng yì jìn rén", "explanation": "很亲切容易接近", "first": "平", "last": "人", "story": "钟南山爷爷没有架子平易近人。态度温和好接近。"}, {"text": "人云亦云", "pinyin": "rén yún yì yún", "explanation": "别人说什么就跟着说", "first": "人", "last": "云", "story": "别人说什么就跟着说什么。没有自己的主见。"}], [{"text": "运用自如", "pinyin": "yùn yòng zì rú", "explanation": "用起来非常熟练", "first": "运", "last": "如", "story": "熟练得随手就能用好，像用筷子一样自然。"}, {"text": "如沐春风", "pinyin": "rú mù chūn fēng", "explanation": "像在春风里很舒服", "first": "如", "last": "风", "story": "老师温柔的教导让人如沐春风。像被温暖的风吹着。"}, {"text": "风调雨顺", "pinyin": "fēng tiáo yǔ shùn", "explanation": "风雨刚好是需要的量", "first": "风", "last": "顺", "story": "农民伯伯盼风调雨顺。风雨都合时宜庄稼长得好。"}, {"text": "瞬息万变", "pinyin": "shùn xī wàn biàn", "explanation": "变化非常快，一眨眼就变了", "first": "瞬", "last": "变", "story": "一会儿下雨一会儿出太阳。极短时间内变化极多。"}], [{"text": "变幻莫测", "pinyin": "biàn huàn mò cè", "explanation": "变化太快猜不到", "first": "变", "last": "测", "story": "夏天的天气变幻莫测。变化太多猜不透。"}, {"text": "策马奔腾", "pinyin": "cè mǎ bēn téng", "explanation": "骑着马飞跑", "first": "策", "last": "腾", "story": "骑着马飞快往前冲。快速地向前进。"}, {"text": "腾云驾雾", "pinyin": "téng yún jià wù", "explanation": "在云和雾里飞行", "first": "腾", "last": "雾", "story": "孙悟空在云雾里飞。飞快地跑。"}, {"text": "五颜六色", "pinyin": "wǔ yán liù sè", "explanation": "各种漂亮的颜色", "first": "五", "last": "色", "story": "彩虹有红橙黄绿青蓝紫。颜色很多很好看。"}], [{"text": "色香味全", "pinyin": "sè xiāng wèi quán", "explanation": "颜色香味都齐全", "first": "色", "last": "全", "story": "妈妈做的菜色香味全。颜色好看香气扑鼻味道也好。"}, {"text": "全力以赴", "pinyin": "quán lì yǐ fù", "explanation": "用全部力气去做", "first": "全", "last": "赴", "story": "尽最大的力量去做。"}, {"text": "赴汤蹈火", "pinyin": "fù tāng dǎo huǒ", "explanation": "为了目标不怕危险", "first": "赴", "last": "火", "story": "忠诚到沸水敢跳火坑敢闯。不怕任何艰险。"}, {"text": "火上加油", "pinyin": "huǒ shàng jiā yóu", "explanation": "让坏事变得更糟", "first": "火", "last": "油", "story": "本来就在生气还来添乱。让情况更严重。"}], [{"text": "有志竟成", "pinyin": "yǒu zhì jìng chéng", "explanation": "有决心就能做成", "first": "有", "last": "成", "story": "只要坚持有志竟成。有决心终究能成功。"}, {"text": "诚心诚意", "pinyin": "chéng xīn chéng yì", "explanation": "真心实意", "first": "诚", "last": "意", "story": "道歉要诚心诚意。发自内心百分之百真诚。"}, {"text": "一举两得", "pinyin": "yī jǔ liǎng dé", "explanation": "做一件事，得到两个好处", "first": "一", "last": "得", "story": "上山砍柴顺便采蘑菇。做一件事得到两个好处。"}, {"text": "得意洋洋", "pinyin": "dé yì yáng yáng", "explanation": "非常得意的样子", "first": "得", "last": "洋", "story": "考了第一名得意洋洋地告诉妈妈。非常得意的样子。"}], [{"text": "扬眉吐气", "pinyin": "yáng méi tǔ qì", "explanation": "抬起头不再憋屈", "first": "扬", "last": "气", "story": "一直被嘲笑，终于考了第一名，抬起头长长舒了一口气。"}, {"text": "七嘴八舌", "pinyin": "qī zuǐ bā shé", "explanation": "很多人争着说话", "first": "七", "last": "舌", "story": "操场上大家七嘴八舌说个没完。很多人同时说话。"}, {"text": "舍己为人", "pinyin": "shě jǐ wèi rén", "explanation": "为了别人放弃自己的利益", "first": "舍", "last": "人", "story": "罗盛教跳进冰窟窿救人。牺牲自己帮助别人。"}, {"text": "人尽其才", "pinyin": "rén jìn qí cái", "explanation": "每个人都发挥才能", "first": "人", "last": "才", "story": "每个人都发挥自己的本领。人人都有用武之地。"}], [{"text": "才貌双全", "pinyin": "cái mào shuāng quán", "explanation": "又有才华又长得好看", "first": "才", "last": "全", "story": "这个姐姐又聪明又漂亮。才华和外貌都很好。"}, {"text": "全心全意", "pinyin": "quán xīn quán yì", "explanation": "一心一意全力做", "first": "全", "last": "意", "story": "小猫钓鱼时蝴蝶来了也不动。把全部心思放进去。"}, {"text": "意气相投", "pinyin": "yì qì xiāng tóu", "explanation": "性格兴趣很合得来", "first": "意", "last": "投", "story": "两个好朋友兴趣一样意气相投。性格合得来。"}, {"text": "投机取巧", "pinyin": "tóu jī qǔ qiǎo", "explanation": "找捷径耍小聪明", "first": "投", "last": "巧", "story": "考试作弊是投机取巧。用不正当手段取巧。"}], [{"text": "巧夺天工", "pinyin": "qiǎo duó tiān gōng", "explanation": "比天然做的还巧妙", "first": "巧", "last": "工", "story": "这件工艺品太精致了巧夺天工。比自然的还巧妙。"}, {"text": "公私分明", "pinyin": "gōng sī fēn míng", "explanation": "公和私分得很清", "first": "公", "last": "明", "story": "包公从来不把公事和私事混在一起。公家私人分得清。"}, {"text": "明辨是非", "pinyin": "míng biàn shì fēi", "explanation": "分得清对和错", "first": "明", "last": "非", "story": "包公铁面无私分得清对错。能清楚判断什么是对什么是错。"}, {"text": "非同小可", "pinyin": "fēi tóng xiǎo kě", "explanation": "不是小事情，事情很大", "first": "非", "last": "可", "story": "不是小事。事情重大不可轻视。"}], [{"text": "可歌可泣", "pinyin": "kě gē kě qì", "explanation": "让人感动让人流泪", "first": "可", "last": "泣", "story": "英雄的故事可歌可泣。让人感动得想唱歌和流泪。"}, {"text": "泣不成声", "pinyin": "qì bù chéng shēng", "explanation": "哭得说不出话", "first": "泣", "last": "声", "story": "难过到说不出话只是一直抽泣。哭得话都说不出来。"}, {"text": "省吃俭用", "pinyin": "shěng chī jiǎn yòng", "explanation": "过得很节省", "first": "省", "last": "用", "story": "爷爷奶奶省吃俭用存钱供我上学。节省着过日子。"}, {"text": "勇往直前", "pinyin": "yǒng wǎng zhí qián", "explanation": "勇敢地一直向前走", "first": "勇", "last": "前", "story": "不怕困难勇敢向前冲。勇敢地一直往前走。"}], [{"text": "千真万确", "pinyin": "qiān zhēn wàn què", "explanation": "绝对是真的", "first": "千", "last": "确", "story": "地球是圆的千真万确。绝对是真实的。"}, {"text": "确认无误", "pinyin": "què rèn wú wù", "explanation": "检查过没有错", "first": "确", "last": "误", "story": "交卷前再检查一遍确认无误。肯定没有错误。"}, {"text": "无穷无尽", "pinyin": "wú qióng wú jìn", "explanation": "怎么都用不完", "first": "无", "last": "尽", "story": "宇宙里的星星无穷无尽。没有尽头怎么做不完。"}, {"text": "尽善尽美", "pinyin": "jìn shàn jìn měi", "explanation": "做到最好最完美", "first": "尽", "last": "美", "story": "这幅画画得太完美了。完美到了极致。"}], [{"text": "眉飞色舞", "pinyin": "méi fēi sè wǔ", "explanation": "高兴得眉毛跳舞", "first": "眉", "last": "舞", "story": "高兴得眉毛飞起来脸色像跳舞。开心极了。"}, {"text": "无微不至", "pinyin": "wú wēi bù zhì", "explanation": "每个细节都照顾到", "first": "无", "last": "至", "story": "妈妈照顾宝宝无微不至。照顾得非常周到。"}, {"text": "至高无上", "pinyin": "zhì gāo wú shàng", "explanation": "高得不能再高了", "first": "至", "last": "上", "story": "妈妈的爱是至高无上的。最高的最好的没有比得上的。"}, {"text": "上行下效", "pinyin": "shàng xíng xià xiào", "explanation": "上面怎么做下面学", "first": "上", "last": "效", "story": "上面怎么做下面就学着。领导怎么做下面怎么学。"}], [{"text": "笑口常开", "pinyin": "xiào kǒu cháng kāi", "explanation": "总是笑呵呵的", "first": "笑", "last": "开", "story": "天天笑口常开。总是开心地笑着。"}, {"text": "开天辟地", "pinyin": "kāi tiān pì dì", "explanation": "从来没有人做过的事", "first": "开", "last": "地", "story": "盘古用斧子开天辟地。指创造了全新的事物。"}, {"text": "滴水成冰", "pinyin": "dī shuǐ chéng bīng", "explanation": "天冷得水滴就结冰", "first": "滴", "last": "冰", "story": "东北的冬天滴水成冰。冷到水滴下去就结冰。"}, {"text": "冰天雪地", "pinyin": "bīng tiān xuě dì", "explanation": "到处是冰雪", "first": "冰", "last": "地", "story": "北极全是冰天雪地。非常寒冷到处是冰雪。"}], [{"text": "地大物博", "pinyin": "dì dà wù bó", "explanation": "土地大东西多", "first": "地", "last": "博", "story": "我们国家土地宽广物产丰富。地域广大资源多。"}, {"text": "博大精深", "pinyin": "bó dà jīng shēn", "explanation": "又宽广又深刻", "first": "博", "last": "深", "story": "中华文化又广又深。内容广博学问深厚。"}, {"text": "深不可测", "pinyin": "shēn bù kě cè", "explanation": "深得看不到底", "first": "深", "last": "测", "story": "大海深不可测。深得看不到底。"}, {"text": "侧目而视", "pinyin": "cè mù ér shì", "explanation": "斜着眼看，心里不服气", "first": "侧", "last": "视", "story": "斜着眼睛偷偷看。不敢正眼看。"}], [{"text": "师出有名", "pinyin": "shī chū yǒu míng", "explanation": "做事有正当理由", "first": "师", "last": "名", "story": "做好事要师出有名。做事情有个正当的理由。"}, {"text": "明知故问", "pinyin": "míng zhī gù wèn", "explanation": "明明知道还故意问", "first": "明", "last": "问", "story": "明明知道答案还要问，逗你玩呢。"}, {"text": "闻鸡起舞", "pinyin": "wén jī qǐ wǔ", "explanation": "听到鸡叫就起来练功", "first": "闻", "last": "舞", "story": "祖逖每天听到鸡叫就起床练剑。早上很早起来刻苦练功。"}, {"text": "雾里看花", "pinyin": "wù lǐ kàn huā", "explanation": "看不真切模模糊糊", "first": "雾", "last": "花", "story": "雾天看花模模糊糊看不清楚。"}], [{"text": "画龙点睛", "pinyin": "huà lóng diǎn jīng", "explanation": "关键的一笔", "first": "画", "last": "睛", "story": "画家画龙最后点上眼睛龙就飞了。最关键的一笔。"}, {"text": "惊天动地", "pinyin": "jīng tiān dòng dì", "explanation": "声势特别大", "first": "惊", "last": "地", "story": "火箭发射的声音惊天动地。声音巨大震动天地。"}, {"text": "低声下气", "pinyin": "dī shēng xià qì", "explanation": "说话小心翼翼的", "first": "低", "last": "气", "story": "做错事后低头小声说话。说话小心翼翼。"}, {"text": "气象万千", "pinyin": "qì xiàng wàn qiān", "explanation": "景象变化壮观", "first": "气", "last": "千", "story": "天空一会儿彩虹一会儿火烧云。景象变化多端、非常壮观。"}], [{"text": "千方百计", "pinyin": "qiān fāng bǎi jì", "explanation": "想尽各种办法", "first": "千", "last": "计", "story": "小蚂蚁想尽办法把大饼干搬回家。用尽所有办法。"}, {"text": "记忆犹新", "pinyin": "jì yì yóu xīn", "explanation": "记得很清楚像刚发生", "first": "记", "last": "新", "story": "第一次去迪士尼的事记忆犹新。还记得清清楚楚。"}, {"text": "信以为真", "pinyin": "xìn yǐ wéi zhēn", "explanation": "相信是真的", "first": "信", "last": "真", "story": "太天真了说什么都信以为真。把假的当成真的。"}, {"text": "真心诚意", "pinyin": "zhēn xīn chéng yì", "explanation": "真心真意不掺假", "first": "真", "last": "意", "story": "对待朋友要真心诚意。发自内心百分之百的真诚。"}], [{"text": "异想天开", "pinyin": "yì xiǎng tiān kāi", "explanation": "想得很奇妙很大胆", "first": "异", "last": "开", "story": "想法奇怪到天都开了。想法很不切实际。"}, {"text": "开卷有益", "pinyin": "kāi juàn yǒu yì", "explanation": "打开书就有好处", "first": "开", "last": "益", "story": "宋太宗说打开书就有好处。只要读书就会有收获。"}, {"text": "一望无际", "pinyin": "yī wàng wú jì", "explanation": "一眼看过去看不到头", "first": "一", "last": "际", "story": "站在海边看过去没有尽头。一眼看不到边。"}, {"text": "鸡飞蛋打", "pinyin": "jī fēi dàn dǎ", "explanation": "两头都落空", "first": "鸡", "last": "打", "story": "笨手笨脚打翻了篮子鸡飞蛋打。两头都落空。"}], [{"text": "答非所问", "pinyin": "dá fēi suǒ wèn", "explanation": "回答的不是问的问题", "first": "答", "last": "问", "story": "问东答西，你说城门楼子他回胳膊肘子。"}, {"text": "闻所未闻", "pinyin": "wén suǒ wèi wén", "explanation": "从没听过的事", "first": "闻", "last": "闻", "story": "在科技馆看到了闻所未闻的事。从来没听过见过。"}, {"text": "问心无愧", "pinyin": "wèn xīn wú kuì", "explanation": "心里没有对不起谁", "first": "问", "last": "愧", "story": "认真做完了作业问心无愧。对得起自己的良心。"}, {"text": "愧不敢当", "pinyin": "kuì bù gǎn dāng", "explanation": "惭愧不敢接受", "first": "愧", "last": "当", "story": "被人夸了连忙说愧不敢当。觉得承受不起。"}], [{"text": "当仁不让", "pinyin": "dāng rén bù ràng", "explanation": "该做的事不推给别人", "first": "当", "last": "让", "story": "遇到该做的事不推让。碰到应该做的事主动承担。"}, {"text": "让贤与能", "pinyin": "ràng xián yǔ néng", "explanation": "把位子让给更有能力的人", "first": "让", "last": "能", "story": "尧把帝位让给了舜。把位置让给更有能力的人。"}, {"text": "能工巧匠", "pinyin": "néng gōng qiǎo jiàng", "explanation": "手艺高超的人", "first": "能", "last": "匠", "story": "鲁班是古代最厉害的能工巧匠。技艺高超的手艺人。"}, {"text": "匠心独运", "pinyin": "jiàng xīn dú yùn", "explanation": "有独特巧妙的想法", "first": "匠", "last": "运", "story": "工匠用心巧妙构思。独特巧妙的心思和设计。"}]];
+
+const WORKDAYS = ["2026-07-06", "2026-07-07", "2026-07-08", "2026-07-09", "2026-07-10", "2026-07-13", "2026-07-14", "2026-07-15", "2026-07-16", "2026-07-17", "2026-07-20", "2026-07-21", "2026-07-22", "2026-07-23", "2026-07-24", "2026-07-27", "2026-07-28", "2026-07-29", "2026-07-30", "2026-07-31", "2026-08-03", "2026-08-04", "2026-08-05", "2026-08-06", "2026-08-07", "2026-08-10", "2026-08-11", "2026-08-12", "2026-08-13", "2026-08-14", "2026-08-17", "2026-08-18", "2026-08-19", "2026-08-20", "2026-08-21", "2026-08-24", "2026-08-25", "2026-08-26", "2026-08-27", "2026-08-28"];
+
+const START_DATE = new Date(2026,6,6);
+const END_DATE = new Date(2026,7,28);
+const TODAY = new Date();
+// For testing, force today. Remove for production:
+// const TODAY = new Date(2026,7,15);
+
+// ============================================================
+// UTILS
+// ============================================================
+function formatDate(d) {
+  const y = d.getFullYear(), m = d.getMonth()+1, day = d.getDate();
+  return y+'-'+String(m).padStart(2,'0')+'-'+String(day).padStart(2,'0');
+}
+function isWeekend(d) { return d.getDay()===0||d.getDay()===6; }
+function isToday(d) { return formatDate(d)===formatDate(TODAY); }
+function isPast(d) { return formatDate(d) <= formatDate(TODAY); }
+function isBetween(d, s, e) { return d>=s && d<=e; }
+function getWeekdayName(d) {
+  const names=['日','一','二','三','四','五','六'];
+  return names[d.getDay()];
+}
+
+// Get all working days as Date objects
+function getWorkingDays() {
+  const days = [];
+  let d = new Date(START_DATE);
+  const end = new Date(END_DATE);
+  while (d <= end) {
+    if (!isWeekend(d)) days.push(new Date(d));
+    d.setDate(d.getDate()+1);
+  }
+  return days;
+}
+
+// ============================================================
+// STORAGE
+// ============================================================
+const STORAGE_KEY = 'idiom_chain_progress';
+function loadProgress() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}'); }
+  catch { return {}; }
+}
+function saveProgress(obj) { localStorage.setItem(STORAGE_KEY,JSON.stringify(obj)); }
+function markDayCompleted(dateStr) {
+  const p = loadProgress();
+  p[dateStr] = { completed: true, time: Date.now() };
+  saveProgress(p);
+}
+function isDayCompleted(dateStr) { return !!loadProgress()[dateStr]?.completed; }
+
+// ============================================================
+// PROGRESS BAR
+// ============================================================
+function updateProgress() {
+  const p = loadProgress();
+  const done = Object.keys(p).filter(k => p[k].completed && WORKDAYS.includes(k)).length;
+  const total = WORKDAYS.length;
+  document.getElementById('progressFill').style.width = (done/total*100)+'%';
+  document.getElementById('progressText').textContent = done+'/'+total+'天';
+}
+
+// ============================================================
+// CONFETTI
+// ============================================================
+function launchConfetti() {
+  const container = document.getElementById('confettiContainer');
+  const colors = ['#ff6b35','#4ecdc4','#ffe66d','#2ecc71','#ff8e53','#a29bfe','#fd79a8'];
+  for(let i=0;i<40;i++){
+    const el = document.createElement('div');
+    el.className = 'confetti';
+    el.style.left = Math.random()*100+'%';
+    el.style.top = -(Math.random()*200)+'px';
+    el.style.background = colors[Math.floor(Math.random()*colors.length)];
+    el.style.animationDelay = Math.random()*0.8+'s';
+    el.style.animationDuration = (1+Math.random()*2)+'s';
+    container.appendChild(el);
+    setTimeout(()=>el.remove(), 2500);
+  }
+}
+
+// ============================================================
+// CALENDAR RENDERING
+// ============================================================
+function renderCalendar() {
+  const container = document.getElementById('calendarView');
+  const progress = loadProgress();
+  const working = getWorkingDays();
+  
+  // Group by month
+  let html = '';
+  let currentMonth = -1;
+  let currentWeek = -1;
+  
+  for (let i=0; i<working.length; i++) {
+    const d = working[i];
+    const m = d.getMonth();
+    const w = getISOWeek(d);
+    
+    if (m !== currentMonth) {
+      if (currentMonth >= 0) html += '</div>'; // close previous grid
+      currentMonth = m;
+      currentWeek = w;
+      const monthNames = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+      html += `<div class="month-label">📆 ${monthNames[m]} ${d.getFullYear()}</div>`;
+      html += `<div class="week-label">一&nbsp;&nbsp;&nbsp;&nbsp;二&nbsp;&nbsp;&nbsp;&nbsp;三&nbsp;&nbsp;&nbsp;&nbsp;四&nbsp;&nbsp;&nbsp;&nbsp;五</div>`;
+      html += `<div class="day-grid">`;
+    } else if (w !== currentWeek) {
+      html += '</div><div class="day-grid">';
+      currentWeek = w;
+    }
+    
+    const dateStr = formatDate(d);
+    const locked = !isPast(d);
+    const done = isDayCompleted(dateStr);
+    const today = isToday(d);
+    
+    let cellClass = 'day-cell';
+    let icon = '';
+    if (locked) { cellClass += ' locked'; icon = '🔒'; }
+    else if (done) { cellClass += ' completed'; icon = '✅'; }
+    else if (today) { cellClass += ' today'; icon = '🎯'; }
+    else { icon = '📝'; }
+    
+    html += `<div class="${cellClass}" data-date="${dateStr}" ${locked?'':'onclick="selectDay(\''+dateStr+'\')"'}>
+      <span class="date-num">${d.getDate()}</span>
+      <span class="day-name">${getWeekdayName(d)}</span>
+      <span class="status-icon">${icon}</span>
+    </div>`;
+  }
+  html += '</div>'; // close last grid
+  
+  container.innerHTML = html;
+}
+
+function getISOWeek(d) {
+  const tmp = new Date(d);
+  tmp.setHours(0,0,0,0);
+  tmp.setDate(tmp.getDate()+3-(tmp.getDay()+6)%7);
+  const jan1 = new Date(tmp.getFullYear(),0,4);
+  return 1+Math.round(((tmp-jan1)/86400000-3+(jan1.getDay()+6)%7)/7);
+}
+
+// ============================================================
+// DAY SELECTION & CHAIN DISPLAY
+// ============================================================
+let currentDayIndex = -1;
+let revealedCount = 0;
+
+function selectDay(dateStr) {
+  const idx = WORKDAYS.indexOf(dateStr);
+  if (idx < 0) return;
+  
+  // Check unlock
+  if (!isPast(new Date(dateStr+'T00:00:00')) && dateStr !== formatDate(TODAY)) {
+    if (!isWeekend(TODAY) || new Date(dateStr+'T00:00:00') > TODAY) {
+      showToast('🔒 这一天还没解锁哦，每天学习当天的内容吧！');
+      return;
+    }
+  }
+  
+  // If weekend and past weekday, allow makeup
+  const targetDate = new Date(dateStr+'T00:00:00');
+  if (isWeekend(TODAY) && targetDate < TODAY && !isWeekend(targetDate)) {
+    // Weekend makeup mode - allow
+  }
+  
+  currentDayIndex = idx;
+  revealedCount = 0;
+  
+  renderChain();
+  switchToLearn();
+  updateProgress();
+}
+
+function renderChain() {
+  if (currentDayIndex < 0) return;
+  
+  const chain = IDIOM_CHAINS[currentDayIndex];
+  const dateStr = WORKDAYS[currentDayIndex];
+  const d = new Date(dateStr+'T00:00:00');
+  const month=d.getMonth()+1, day=d.getDate();
+  const weekNames=['日','一','二','三','四','五','六'];
+  
+  document.getElementById('dayTitle').textContent = 
+    `📖 ${month}月${day}日 星期${weekNames[d.getDay()]} · 成语接龙`;
+  document.getElementById('emptyState').style.display = 'none';
+  
+  const display = document.getElementById('chainDisplay');
+  display.style.display = 'block';
+  
+  let html = '';
+  for (let i=0; i<chain.length; i++) {
+    const idiom = chain[i];
+    const shown = i < revealedCount;
+    
+    html += `<div class="idiom-card${shown?' revealed':''}" id="card-${i}"${!shown&&i===revealedCount?' onclick="revealNext()"':''}>
+      <span class="num-badge">${i+1}</span>
+      <div class="idiom-text">${shown?idiom.text:'❓'}</div>
+      <div class="idiom-pinyin">${shown?idiom.pinyin:'点击揭晓'}</div>
+      <div class="idiom-expl">${shown?idiom.explanation:''}</div>
+      ${shown&&idiom.story?`
+        <span class="story-hint" onclick="toggleStory(${i})">📖 典故</span>
+        <div class="idiom-story" id="story-${i}">
+          <span class="story-label">📖 典故：</span>${idiom.story}
+        </div>
+      `:''}
+      ${shown?`
+        <div class="idiom-actions">
+          <button class="mini-btn speak-btn-${i}" onclick="speakIdiom(${i});event.stopPropagation();">🔊 朗读</button>
+          ${idiom.story?`<button class="mini-btn" id="story-btn-${i}" onclick="toggleStory(${i});event.stopPropagation();">📖 典故</button>`:''}
+        </div>
+      `:''}
+      ${i===revealedCount&&!shown?'<div class="tap-hint">👆 点这里揭晓</div>':''}
+    </div>`;
+    
+    if (i < chain.length-1) {
+      html += `<div class="arrow-down${i>=revealedCount?' hidden':''}">⬇️</div>`;
+    }
+  }
+  
+  // All revealed
+  if (revealedCount >= chain.length) {
+    html += `<div class="completion-msg">
+      <span class="emoji">🎉</span>
+      <span class="msg">太棒了！今天的4个成语都学会啦！</span>
+      <p style="font-size:13px;color:#888;margin-top:6px;">
+        接龙路径：${chain.map(c=>c.text).join(' → ')}
+      </p>
+    </div>`;
+  }
+  
+  html += `<div class="chain-controls">`;
+  if (revealedCount < chain.length) {
+    html += `<button class="btn btn-primary" onclick="revealNext()">✨ 揭晓下一个</button>`;
+  }
+  if (revealedCount > 0 && revealedCount < chain.length) {
+    html += `<button class="btn btn-outline" onclick="revealAll()">🔍 全部揭晓</button>`;
+  }
+  if (revealedCount > 0) {
+    html += `<button class="btn btn-outline" onclick="resetChain()">🔄 重新来</button>`;
+  }
+  html += `</div>`;
+  
+  // TTS read-all bar
+  if (revealedCount > 0) {
+    html += `<div class="tts-bar">
+      <button class="tts-main-btn" id="readAllBtn" onclick="speakAll()">🔊 朗读全部成语</button>
+      <button class="btn btn-outline" id="stopBtn" style="display:none;padding:10px 20px;font-size:14px;" onclick="stopSpeech()">⏹ 停止朗读</button>
+    </div>`;
+  }
+  
+  display.innerHTML = html;
+}
+
+function revealNext() {
+  if (currentDayIndex < 0) return;
+  const chain = IDIOM_CHAINS[currentDayIndex];
+  if (revealedCount < chain.length) {
+    revealedCount++;
+    renderChain();
+    
+    // Mark as completed if all revealed
+    if (revealedCount >= chain.length) {
+      markDayCompleted(WORKDAYS[currentDayIndex]);
+      updateProgress();
+      renderCalendar();
+      launchConfetti();
+      
+      // Auto vibrate if on mobile
+      if (navigator.vibrate) navigator.vibrate([100,50,100,50,200]);
+    }
+    
+    // Scroll to newly revealed card
+    setTimeout(() => {
+      const cards = document.querySelectorAll('.idiom-card.revealed');
+      if (cards.length > 0) {
+        cards[cards.length-1].scrollIntoView({ behavior:'smooth', block:'center' });
+      }
+    }, 100);
+  }
+}
+
+function revealAll() {
+  if (currentDayIndex < 0) return;
+  const chain = IDIOM_CHAINS[currentDayIndex];
+  revealedCount = chain.length;
+  renderChain();
+  markDayCompleted(WORKDAYS[currentDayIndex]);
+  updateProgress();
+  renderCalendar();
+  launchConfetti();
+}
+
+function resetChain() {
+  revealedCount = 0;
+  renderChain();
+}
+
+// ============================================================
+// TOAST
+// ============================================================
+function showToast(msg) {
+  const el = document.createElement('div');
+  el.style.cssText = `
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+    background: #333; color: white; padding: 12px 24px; border-radius: 30px;
+    font-size: 14px; font-weight: bold; z-index: 10000;
+    animation: toastIn 0.3s ease, toastOut 0.3s ease 2s forwards;
+    pointer-events: none;
+  `;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(), 2500);
+}
+
+// Add toast styles
+const toastStyle = document.createElement('style');
+toastStyle.textContent = `
+@keyframes toastIn { from { opacity:0; transform:translateX(-50%) translateY(-20px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
+@keyframes toastOut { from { opacity:1; } to { opacity:0; } }
+`;
+document.head.appendChild(toastStyle);
+
+// ============================================================
+// WEEKEND BANNER
+// ============================================================
+function updateWeekendBanner() {
+  const banner = document.getElementById('weekendBanner');
+  if (isWeekend(TODAY)) {
+    // Check if there are missed days
+    const progress = loadProgress();
+    const working = getWorkingDays();
+    const missed = working.filter(d => {
+      const ds = formatDate(d);
+      return ds < formatDate(TODAY) && !progress[ds]?.completed;
+    });
+    if (missed.length > 0) {
+      banner.classList.add('show');
+    } else {
+      banner.classList.remove('show');
+    }
+  } else {
+    banner.classList.remove('show');
+  }
+}
+
+// ============================================================
+// TAB SWITCHING
+// ============================================================
+function switchToCalendar() {
+  document.getElementById('calendarView').classList.add('show');
+  document.getElementById('learnView').classList.remove('show');
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelector('[data-tab="calendar"]').classList.add('active');
+}
+function switchToLearn() {
+  document.getElementById('calendarView').classList.remove('show');
+  document.getElementById('learnView').classList.add('show');
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelector('[data-tab="learn"]').classList.add('active');
+}
+
+document.querySelectorAll('.tab').forEach(tab=>{
+  tab.addEventListener('click', ()=>{
+    const target = tab.dataset.tab;
+    if (target==='calendar') switchToCalendar();
+    else switchToLearn();
+  });
+});
+
+// ============================================================
+// STORY TOGGLE
+// ============================================================
+function toggleStory(idx) {
+  const el = document.getElementById('story-'+idx);
+  const btn = document.getElementById('story-btn-'+idx);
+  if (el) {
+    el.classList.toggle('show');
+    if (btn) btn.textContent = el.classList.contains('show') ? '📖 收起' : '📖 典故';
+  }
+}
+
+// ============================================================
+// TTS (Text-to-Speech)
+// ============================================================
+let currentUtterance = null;
+let isSpeaking = false;
+
+function stopSpeech() {
+  if (currentUtterance) {
+    speechSynthesis.cancel();
+    currentUtterance = null;
+  }
+  isSpeaking = false;
+  // Reset all buttons
+  document.querySelectorAll('.speaking,.playing').forEach(b => b.classList.remove('speaking','playing'));
+  const stopBtn = document.getElementById('stopBtn');
+  if (stopBtn) stopBtn.style.display = 'none';
+  const readAllBtn = document.getElementById('readAllBtn');
+  if (readAllBtn) readAllBtn.style.display = '';
+}
+
+function getChineseVoice() {
+  const voices = speechSynthesis.getVoices();
+  // Prefer Chinese voices
+  let voice = voices.find(v => v.lang.startsWith('zh-CN') && v.localService);
+  if (!voice) voice = voices.find(v => v.lang.startsWith('zh-CN'));
+  if (!voice) voice = voices.find(v => v.lang.startsWith('zh'));
+  if (!voice) voice = voices.find(v => v.lang.startsWith('ja')); // fallback
+  return voice || voices[0];
+}
+
+function speak(text, onEnd) {
+  stopSpeech();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = 'zh-CN';
+  utterance.rate = 0.85;  // slightly slower for kids
+  utterance.pitch = 1.1;  // slightly higher, more friendly
+  utterance.volume = 1;
+  
+  const voice = getChineseVoice();
+  if (voice) utterance.voice = voice;
+  
+  utterance.onend = () => {
+    currentUtterance = null;
+    isSpeaking = false;
+    document.querySelectorAll('.speaking,.playing').forEach(b => b.classList.remove('speaking','playing'));
+    const stopBtn = document.getElementById('stopBtn');
+    if (stopBtn) stopBtn.style.display = 'none';
+    const readAllBtn = document.getElementById('readAllBtn');
+    if (readAllBtn) readAllBtn.style.display = '';
+    if (onEnd) onEnd();
+  };
+  
+  utterance.onerror = () => {
+    currentUtterance = null;
+    isSpeaking = false;
+    document.querySelectorAll('.speaking,.playing').forEach(b => b.classList.remove('speaking','playing'));
+    const stopBtn = document.getElementById('stopBtn');
+    if (stopBtn) stopBtn.style.display = 'none';
+    const readAllBtn = document.getElementById('readAllBtn');
+    if (readAllBtn) readAllBtn.style.display = '';
+  };
+  
+  currentUtterance = utterance;
+  isSpeaking = true;
+  // Show stop button, hide read-all
+  const stopBtn = document.getElementById('stopBtn');
+  if (stopBtn) stopBtn.style.display = '';
+  const readAllBtn = document.getElementById('readAllBtn');
+  if (readAllBtn) readAllBtn.style.display = 'none';
+  speechSynthesis.speak(utterance);
+}
+
+function speakIdiom(idx) {
+  if (currentDayIndex < 0) return;
+  const chain = IDIOM_CHAINS[currentDayIndex];
+  if (idx >= chain.length) return;
+  
+  const idiom = chain[idx];
+  let text = idiom.text + '。';
+  if (idiom.explanation) text += idiom.explanation + '。';
+  if (idiom.story) text += '典故：' + idiom.story;
+  
+  // Highlight speaking button
+  const btn = document.querySelector('.speak-btn-'+idx);
+  if (btn) btn.classList.add('speaking');
+  
+  speak(text);
+}
+
+function speakAll() {
+  if (currentDayIndex < 0) return;
+  const chain = IDIOM_CHAINS[currentDayIndex];
+  
+  stopSpeech();
+  
+  // Highlight read-all button
+  const btn = document.getElementById('readAllBtn');
+  if (btn) btn.classList.add('playing');
+  
+  let idx = 0;
+  function speakNext() {
+    if (idx >= revealedCount || idx >= chain.length) {
+      if (btn) btn.classList.remove('playing');
+      return;
+    }
+    const idiom = chain[idx];
+    let text = '第' + (idx+1) + '个，' + idiom.text + '。';
+    if (idiom.explanation) text += idiom.explanation + '。';
+    if (idiom.story) text += '典故：' + idiom.story + '。';
+    
+    // Highlight current card's speak button
+    document.querySelectorAll('.speaking').forEach(b => b.classList.remove('speaking'));
+    const speakBtn = document.querySelector('.speak-btn-'+idx);
+    if (speakBtn) speakBtn.classList.add('speaking');
+    
+    idx++;
+    speak(text, speakNext);
+  }
+  
+  speakNext();
+}
+
+// ============================================================
+// INIT
+// ============================================================
+function init() {
+  renderCalendar();
+  updateProgress();
+  updateWeekendBanner();
+  
+  // Auto-select today if it's a weekday
+  const todayStr = formatDate(TODAY);
+  const idx = WORKDAYS.indexOf(todayStr);
+  if (idx >= 0) {
+    selectDay(todayStr);
+  } else if (isWeekend(TODAY)) {
+    // On weekends, suggest checking calendar
+    document.getElementById('dayTitle').textContent = 
+      '🎉 周末啦！可以补学之前漏掉的课哦～点击日历选择日期';
+  }
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight' || e.key === ' ') {
+    e.preventDefault();
+    if (isSpeaking) stopSpeech();
+    revealNext();
+  }
+  if (e.key === 'Escape') {
+    if (isSpeaking) { stopSpeech(); return; }
+    resetChain();
+  }
+  if (e.key === 's' || e.key === 'S') {
+    if (revealedCount > 0 && !isSpeaking) speakAll();
+  }
+});
+
+// Preload Chinese voices
+speechSynthesis.onvoiceschanged = () => { getChineseVoice(); };
+speechSynthesis.getVoices();
+
+init();
+</script>
+</body>
+</html>

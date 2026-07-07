@@ -870,14 +870,75 @@ function toggleStory(idx) {
 // ============================================================
 let currentUtterance = null;
 let isSpeaking = false;
+let currentAudio = null;
+
+// 检测安卓（微信X5内核对Web Speech API支持差）
+function isAndroid() {
+  return /android/i.test(navigator.userAgent);
+}
+
+// 判断是否需要使用在线TTS
+function shouldUseOnlineTTS() {
+  if (isAndroid()) return true;
+  if (!window.speechSynthesis || typeof SpeechSynthesisUtterance === 'undefined') return true;
+  return false;
+}
+
+// 在线TTS（有道词典接口，兼容安卓微信）
+function playOnlineTTS(text, onEnd) {
+  const maxLen = 180;
+  const segments = [];
+  let remaining = text;
+  while (remaining.length > 0) {
+    let cut = remaining.length;
+    if (cut > maxLen) {
+      const sub = remaining.substring(0, maxLen);
+      let lastBreak = -1;
+      for (const ch of ['\u3002','\uff0c','\uff1b','\uff01','\uff1f','\u3001']) {
+        const pos = sub.lastIndexOf(ch);
+        if (pos > lastBreak) lastBreak = pos;
+      }
+      cut = lastBreak > 30 ? lastBreak + 1 : maxLen;
+    }
+    segments.push(remaining.substring(0, cut));
+    remaining = remaining.substring(cut);
+  }
+
+  let segIdx = 0;
+
+  function playNext() {
+    if (!isSpeaking || segIdx >= segments.length) {
+      if (onEnd) onEnd();
+      return;
+    }
+    const seg = segments[segIdx];
+    const url = 'https://dict.youdao.com/dictvoice?audio=' + encodeURIComponent(seg) + '&le=zh';
+
+    if (currentAudio) {
+      currentAudio.pause();
+    }
+
+    const audio = new Audio();
+    audio.src = url;
+    audio.crossOrigin = 'anonymous';
+    currentAudio = audio;
+
+    audio.onended = () => { segIdx++; playNext(); };
+    audio.onerror = () => { segIdx++; playNext(); };
+    audio.play().catch(() => { segIdx++; playNext(); });
+  }
+
+  playNext();
+}
 
 function stopSpeech() {
-  if (currentUtterance) {
-    speechSynthesis.cancel();
-    currentUtterance = null;
+  if (window.speechSynthesis) speechSynthesis.cancel();
+  currentUtterance = null;
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio = null;
   }
   isSpeaking = false;
-  // Reset all buttons
   document.querySelectorAll('.speaking,.playing').forEach(b => b.classList.remove('speaking','playing'));
   const stopBtn = document.getElementById('stopBtn');
   if (stopBtn) stopBtn.style.display = 'none';
@@ -886,28 +947,26 @@ function stopSpeech() {
 }
 
 function getChineseVoice() {
+  if (!window.speechSynthesis) return null;
   const voices = speechSynthesis.getVoices();
-  // Prefer Chinese voices
   let voice = voices.find(v => v.lang.startsWith('zh-CN') && v.localService);
   if (!voice) voice = voices.find(v => v.lang.startsWith('zh-CN'));
   if (!voice) voice = voices.find(v => v.lang.startsWith('zh'));
-  if (!voice) voice = voices.find(v => v.lang.startsWith('ja')); // fallback
-  return voice || voices[0];
+  return voice || null;
 }
 
 function speak(text, onEnd) {
   stopSpeech();
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = 'zh-CN';
-  utterance.rate = 0.85;  // slightly slower for kids
-  utterance.pitch = 1.1;  // slightly higher, more friendly
-  utterance.volume = 1;
-  
-  const voice = getChineseVoice();
-  if (voice) utterance.voice = voice;
-  
-  utterance.onend = () => {
+  isSpeaking = true;
+
+  const stopBtn = document.getElementById('stopBtn');
+  if (stopBtn) stopBtn.style.display = '';
+  const readAllBtn = document.getElementById('readAllBtn');
+  if (readAllBtn) readAllBtn.style.display = 'none';
+
+  function finishSpeak() {
     currentUtterance = null;
+    currentAudio = null;
     isSpeaking = false;
     document.querySelectorAll('.speaking,.playing').forEach(b => b.classList.remove('speaking','playing'));
     const stopBtn = document.getElementById('stopBtn');
@@ -915,26 +974,28 @@ function speak(text, onEnd) {
     const readAllBtn = document.getElementById('readAllBtn');
     if (readAllBtn) readAllBtn.style.display = '';
     if (onEnd) onEnd();
-  };
-  
-  utterance.onerror = () => {
-    currentUtterance = null;
-    isSpeaking = false;
-    document.querySelectorAll('.speaking,.playing').forEach(b => b.classList.remove('speaking','playing'));
-    const stopBtn = document.getElementById('stopBtn');
-    if (stopBtn) stopBtn.style.display = 'none';
-    const readAllBtn = document.getElementById('readAllBtn');
-    if (readAllBtn) readAllBtn.style.display = '';
-  };
-  
-  currentUtterance = utterance;
-  isSpeaking = true;
-  // Show stop button, hide read-all
-  const stopBtn = document.getElementById('stopBtn');
-  if (stopBtn) stopBtn.style.display = '';
-  const readAllBtn = document.getElementById('readAllBtn');
-  if (readAllBtn) readAllBtn.style.display = 'none';
-  speechSynthesis.speak(utterance);
+  }
+
+  if (shouldUseOnlineTTS()) {
+    // 安卓/不支持Web Speech API → 在线TTS
+    playOnlineTTS(text, finishSpeak);
+  } else {
+    // iOS/桌面 → Web Speech API
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'zh-CN';
+    utterance.rate = 0.85;
+    utterance.pitch = 1.1;
+    utterance.volume = 1;
+
+    const voice = getChineseVoice();
+    if (voice) utterance.voice = voice;
+
+    utterance.onend = finishSpeak;
+    utterance.onerror = finishSpeak;
+
+    currentUtterance = utterance;
+    speechSynthesis.speak(utterance);
+  }
 }
 
 function speakIdiom(idx) {
@@ -1023,9 +1084,27 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// Preload Chinese voices
-speechSynthesis.onvoiceschanged = () => { getChineseVoice(); };
-speechSynthesis.getVoices();
+// Preload Chinese voices (安卓微信可能不支持speechSynthesis)
+if (window.speechSynthesis) {
+  speechSynthesis.onvoiceschanged = () => { getChineseVoice(); };
+  speechSynthesis.getVoices();
+}
+
+// 安卓微信音频解锁：首次触摸时解锁后续播放权限
+if (isAndroid()) {
+  let audioUnlocked = false;
+  function unlockAudio() {
+    if (audioUnlocked) return;
+    audioUnlocked = true;
+    try {
+      const a = new Audio();
+      a.muted = true;
+      a.play().then(()=>{a.pause();}).catch(()=>{});
+    } catch(e) {}
+  }
+  document.addEventListener('touchstart', unlockAudio, {once:true, capture:true});
+  document.addEventListener('click', unlockAudio, {once:true, capture:true});
+}
 
 init();
 </script>

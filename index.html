@@ -871,6 +871,7 @@ function toggleStory(idx) {
 let currentUtterance = null;
 let isSpeaking = false;
 let currentAudio = null;
+let audioElInDOM = null;  // DOM中的audio元素，安卓微信兼容
 
 // 检测安卓（微信X5内核对Web Speech API支持差）
 function isAndroid() {
@@ -884,7 +885,18 @@ function shouldUseOnlineTTS() {
   return false;
 }
 
-// 在线TTS（有道词典接口，兼容安卓微信）
+// 创建DOM audio元素（安卓微信X5内核对new Audio()支持差，需要DOM元素）
+function ensureAudioElement() {
+  if (!audioElInDOM) {
+    audioElInDOM = document.createElement('audio');
+    audioElInDOM.preload = 'auto';
+    // 不设置crossOrigin！有道不支持CORS，X5会拒绝
+    document.body.appendChild(audioElInDOM);
+  }
+  return audioElInDOM;
+}
+
+// 在线TTS（有道词典接口，专为安卓微信X5优化）
 function playOnlineTTS(text, onEnd) {
   const maxLen = 180;
   const segments = [];
@@ -912,20 +924,72 @@ function playOnlineTTS(text, onEnd) {
       return;
     }
     const seg = segments[segIdx];
-    const url = 'https://dict.youdao.com/dictvoice?audio=' + encodeURIComponent(seg) + '&le=zh';
+    // type=2 = 女声朗读，音质更清晰
+    const url = 'https://dict.youdao.com/dictvoice?audio=' + encodeURIComponent(seg) + '&le=zh&type=2';
 
     if (currentAudio) {
       currentAudio.pause();
+      currentAudio.removeAttribute('src');
+      currentAudio.load(); // 释放之前的资源
     }
 
-    const audio = new Audio();
-    audio.src = url;
-    audio.crossOrigin = 'anonymous';
+    const audio = ensureAudioElement();
     currentAudio = audio;
+    audio.src = url;
 
-    audio.onended = () => { segIdx++; playNext(); };
-    audio.onerror = () => { segIdx++; playNext(); };
-    audio.play().catch(() => { segIdx++; playNext(); });
+    // X5内核必须等音频加载完再播放
+    function tryPlay() {
+      if (!isSpeaking) {
+        if (onEnd) onEnd();
+        return;
+      }
+      audio.play().then(() => {
+        // 播放成功，无需额外操作
+      }).catch((e) => {
+        // 播放失败，3秒后自动跳到下一段
+        console.warn('TTS play failed:', e);
+        setTimeout(() => { segIdx++; playNext(); }, 500);
+      });
+    }
+
+    // 等音频可播放后再调用play（X5内核关键要求）
+    audio.oncanplaythrough = () => {
+      audio.oncanplaythrough = null;
+      audio.onerror = null;
+      tryPlay();
+    };
+
+    audio.onerror = () => {
+      audio.oncanplaythrough = null;
+      audio.onerror = null;
+      console.warn('TTS load error, skipping segment');
+      segIdx++;
+      playNext();
+    };
+
+    // 兜底：如果5秒内canplaythrough没触发，强制尝试播放或跳过
+    setTimeout(() => {
+      if (audio.oncanplaythrough !== null) {
+        // 还没触发canplaythrough，可能卡住了
+        audio.oncanplaythrough = null;
+        audio.onerror = null;
+        if (audio.readyState >= 2) {
+          tryPlay();
+        } else {
+          segIdx++;
+          playNext();
+        }
+      }
+    }, 5000);
+
+    audio.onended = () => {
+      audio.onended = null;
+      segIdx++;
+      playNext();
+    };
+
+    // 开始加载
+    audio.load();
   }
 
   playNext();
@@ -936,6 +1000,8 @@ function stopSpeech() {
   currentUtterance = null;
   if (currentAudio) {
     currentAudio.pause();
+    currentAudio.removeAttribute('src');
+    currentAudio.load();
     currentAudio = null;
   }
   isSpeaking = false;
@@ -1092,18 +1158,33 @@ if (window.speechSynthesis) {
 
 // 安卓微信音频解锁：首次触摸时解锁后续播放权限
 if (isAndroid()) {
+  // 安卓微信X5内核音频解锁：首次触摸时播放一段无声音频来激活音频通道
+  // 关键：用DOM audio元素（不是new Audio()），不设crossOrigin
   let audioUnlocked = false;
   function unlockAudio() {
     if (audioUnlocked) return;
     audioUnlocked = true;
     try {
-      const a = new Audio();
-      a.muted = true;
-      a.play().then(()=>{a.pause();}).catch(()=>{});
+      const a = ensureAudioElement();
+      // 加载一段极短的静音音频来解锁X5的音频播放通道
+      a.src = 'data:audio/mp3;base64,SUQzBAAAAAABEVRYWFgAAAAtAAABYwAAAABEVRYWFgAAAAtAAAAZgAAAABEVRYWFgAAAAtAAABYwAAAABEVRYWFgAAAAtAAABYwAAAABEVRYWFgAAAAtAAABYwAAAABEVRYWFgAAAAtAAABYwAAAABEVRYWFgAAAAtAAABYwAAAABEVRYWFgAAAAtAAAAZgAAAP//7kQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
+      a.play().then(() => {
+        a.pause();
+        a.removeAttribute('src');
+        a.load();
+      }).catch(() => {
+        // 即使解锁失败也清除src
+        a.removeAttribute('src');
+        a.load();
+      });
     } catch(e) {}
   }
+  // 用touchstart和click双重保障
   document.addEventListener('touchstart', unlockAudio, {once:true, capture:true});
   document.addEventListener('click', unlockAudio, {once:true, capture:true});
+  // 也在DOMContentLoaded时尝试（某些X5版本允许非交互初始化）
+  if (document.readyState === 'complete') unlockAudio();
+  else document.addEventListener('DOMContentLoaded', unlockAudio, {once:true});
 }
 
 init();

@@ -731,6 +731,10 @@ function renderChain() {
     html += `<div class="tts-bar">
       <button class="tts-main-btn" id="readAllBtn" onclick="speakAll()">🔊 朗读全部成语</button>
       <button class="btn btn-outline" id="stopBtn" style="display:none;padding:10px 20px;font-size:14px;" onclick="stopSpeech()">⏹ 停止朗读</button>
+      <button class="btn btn-outline" style="padding:10px 20px;font-size:12px;margin-top:4px;" onclick="document.getElementById('ttsDebugPanel').style.display=document.getElementById('ttsDebugPanel').style.display==='none'?'block':'none'">🔧 调试</button>
+      <div id="ttsDebugPanel" style="display:none;margin-top:8px;padding:8px;background:#f5f5f5;border-radius:8px;font-size:11px;max-height:150px;overflow-y:auto;">
+        <pre id="ttsDebug" style="margin:0;white-space:pre-wrap;font-size:11px;color:#666;">等待操作...</pre>
+      </div>
     </div>`;
   }
   
@@ -866,38 +870,93 @@ function toggleStory(idx) {
 }
 
 // ============================================================
-// TTS (Text-to-Speech)
+// TTS (Text-to-Speech) — 第三版，专为安卓微信X5内核优化
+// 核心发现：X5有1秒规则（点击后超1秒不许播放），必须用WeixinJSBridge绕过
 // ============================================================
 let currentUtterance = null;
 let isSpeaking = false;
 let currentAudio = null;
-let audioElInDOM = null;  // DOM中的audio元素，安卓微信兼容
+let audioElInDOM = null;
 
-// 检测安卓（微信X5内核对Web Speech API支持差）
-function isAndroid() {
-  return /android/i.test(navigator.userAgent);
+// 调试日志（用户可见，方便排查问题）
+let ttsDebugLog = [];
+function ttsLog(msg) {
+  const ts = new Date().toLocaleTimeString();
+  ttsDebugLog.push(ts + ' ' + msg);
+  if (ttsDebugLog.length > 20) ttsDebugLog.shift();
+  const el = document.getElementById('ttsDebug');
+  if (el) el.textContent = ttsDebugLog.join('\n');
 }
 
-// 判断是否需要使用在线TTS
+// 检测环境
+function isAndroid() { return /android/i.test(navigator.userAgent); }
+function isWeChat() { return /MicroMessenger/i.test(navigator.userAgent); }
+
+// 判断是否使用在线TTS（安卓微信必须用在线TTS + WeixinJSBridge）
 function shouldUseOnlineTTS() {
-  if (isAndroid()) return true;
+  if (isAndroid() && isWeChat()) return true;
   if (!window.speechSynthesis || typeof SpeechSynthesisUtterance === 'undefined') return true;
   return false;
 }
 
-// 创建DOM audio元素（安卓微信X5内核对new Audio()支持差，需要DOM元素）
+// 创建/获取DOM中的audio元素
 function ensureAudioElement() {
   if (!audioElInDOM) {
     audioElInDOM = document.createElement('audio');
     audioElInDOM.preload = 'auto';
-    // 不设置crossOrigin！有道不支持CORS，X5会拒绝
+    // 关键：不设crossOrigin！有道不支持CORS，X5会直接拒绝
     document.body.appendChild(audioElInDOM);
+    ttsLog('创建DOM audio元素');
   }
   return audioElInDOM;
 }
 
-// 在线TTS（有道词典接口，专为安卓微信X5优化）
+// 微信WeixinJSBridge播放音频（核心！绕过X5的1秒限制）
+function wxAudioPlay(audioEl) {
+  return new Promise((resolve, reject) => {
+    if (typeof WeixinJSBridge !== 'undefined') {
+      ttsLog('使用WeixinJSBridge.invoke播放');
+      WeixinJSBridge.invoke('getNetworkType', {}, function() {
+        ttsLog('WeixinJSBridge回调触发，开始play()');
+        audioEl.play().then(resolve).catch(reject);
+      });
+    } else {
+      // WeixinJSBridge还没注入，监听就绪事件
+      ttsLog('WeixinJSBridge未就绪，监听WeixinJSBridgeReady');
+      function onReady() {
+        ttsLog('WeixinJSBridgeReady触发');
+        WeixinJSBridge.invoke('getNetworkType', {}, function() {
+          ttsLog('WeixinJSBridge回调触发，开始play()');
+          audioEl.play().then(resolve).catch(reject);
+        });
+      }
+      document.addEventListener('WeixinJSBridgeReady', onReady, { once: true });
+      // 同时也直接尝试播放（非微信环境下）
+      setTimeout(() => {
+        document.removeEventListener('WeixinJSBridgeReady', onReady);
+        if (!resolve.called) {
+          resolve.called = true;
+          ttsLog('WeixinJSBridge超时，直接play()');
+          audioEl.play().then(resolve).catch(reject);
+        }
+      }, 2000);
+    }
+  });
+}
+
+// 通用播放：根据环境选择WeixinJSBridge或直接play()
+function safeAudioPlay(audioEl) {
+  if (isWeChat() && isAndroid()) {
+    return wxAudioPlay(audioEl);
+  } else {
+    ttsLog('非安卓微信，直接play()');
+    return audioEl.play();
+  }
+}
+
+// 在线TTS（有道词典接口）
 function playOnlineTTS(text, onEnd) {
+  ttsLog('playOnlineTTS: ' + text.substring(0, 20) + '...');
   const maxLen = 180;
   const segments = [];
   let remaining = text;
@@ -906,7 +965,7 @@ function playOnlineTTS(text, onEnd) {
     if (cut > maxLen) {
       const sub = remaining.substring(0, maxLen);
       let lastBreak = -1;
-      for (const ch of ['\u3002','\uff0c','\uff1b','\uff01','\uff1f','\u3001']) {
+      for (const ch of ['。','，','；','！','？','、']) {
         const pos = sub.lastIndexOf(ch);
         if (pos > lastBreak) lastBreak = pos;
       }
@@ -915,80 +974,88 @@ function playOnlineTTS(text, onEnd) {
     segments.push(remaining.substring(0, cut));
     remaining = remaining.substring(cut);
   }
+  ttsLog('分段数: ' + segments.length);
 
   let segIdx = 0;
 
   function playNext() {
     if (!isSpeaking || segIdx >= segments.length) {
+      ttsLog('播放结束');
       if (onEnd) onEnd();
       return;
     }
     const seg = segments[segIdx];
-    // type=2 = 女声朗读，音质更清晰
+    ttsLog('播放第' + (segIdx+1) + '段: ' + seg.substring(0, 15) + '...');
     const url = 'https://dict.youdao.com/dictvoice?audio=' + encodeURIComponent(seg) + '&le=zh&type=2';
 
     if (currentAudio) {
       currentAudio.pause();
       currentAudio.removeAttribute('src');
-      currentAudio.load(); // 释放之前的资源
+      currentAudio.load();
     }
 
     const audio = ensureAudioElement();
     currentAudio = audio;
     audio.src = url;
 
-    // X5内核必须等音频加载完再播放
-    function tryPlay() {
-      if (!isSpeaking) {
-        if (onEnd) onEnd();
-        return;
-      }
-      audio.play().then(() => {
-        // 播放成功，无需额外操作
+    let played = false;
+
+    function doPlay() {
+      if (played || !isSpeaking) return;
+      played = true;
+      ttsLog('音频已加载，开始播放...');
+      safeAudioPlay(audio).then(() => {
+        ttsLog('play()成功！');
       }).catch((e) => {
-        // 播放失败，3秒后自动跳到下一段
-        console.warn('TTS play failed:', e);
-        setTimeout(() => { segIdx++; playNext(); }, 500);
+        ttsLog('play()失败: ' + (e.name || e.message || 'unknown'));
+        // 再试一次直接play
+        setTimeout(() => {
+          audio.play().then(() => { ttsLog('二次play()成功'); }).catch(() => {
+            ttsLog('二次play()也失败，跳过此段');
+            segIdx++;
+            playNext();
+          });
+        }, 300);
       });
     }
 
-    // 等音频可播放后再调用play（X5内核关键要求）
+    // 等音频加载后播放
     audio.oncanplaythrough = () => {
       audio.oncanplaythrough = null;
       audio.onerror = null;
-      tryPlay();
+      doPlay();
     };
 
     audio.onerror = () => {
       audio.oncanplaythrough = null;
       audio.onerror = null;
-      console.warn('TTS load error, skipping segment');
+      ttsLog('音频加载失败，跳过');
       segIdx++;
       playNext();
     };
 
-    // 兜底：如果5秒内canplaythrough没触发，强制尝试播放或跳过
+    audio.onended = () => {
+      audio.onended = null;
+      ttsLog('一段播放完成');
+      segIdx++;
+      playNext();
+    };
+
+    // 兜底超时（3秒后强制尝试）
     setTimeout(() => {
-      if (audio.oncanplaythrough !== null) {
-        // 还没触发canplaythrough，可能卡住了
+      if (!played && audio.oncanplaythrough !== null) {
         audio.oncanplaythrough = null;
         audio.onerror = null;
+        ttsLog('3秒兜底触发，readyState=' + audio.readyState);
         if (audio.readyState >= 2) {
-          tryPlay();
+          doPlay();
         } else {
           segIdx++;
           playNext();
         }
       }
-    }, 5000);
+    }, 3000);
 
-    audio.onended = () => {
-      audio.onended = null;
-      segIdx++;
-      playNext();
-    };
-
-    // 开始加载
     audio.load();
   }
 
@@ -996,6 +1063,7 @@ function playOnlineTTS(text, onEnd) {
 }
 
 function stopSpeech() {
+  ttsLog('停止播放');
   if (window.speechSynthesis) speechSynthesis.cancel();
   currentUtterance = null;
   if (currentAudio) {
@@ -1043,10 +1111,10 @@ function speak(text, onEnd) {
   }
 
   if (shouldUseOnlineTTS()) {
-    // 安卓/不支持Web Speech API → 在线TTS
+    ttsLog('使用在线TTS（有道）');
     playOnlineTTS(text, finishSpeak);
   } else {
-    // iOS/桌面 → Web Speech API
+    ttsLog('使用Web Speech API');
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'zh-CN';
     utterance.rate = 0.85;
@@ -1150,41 +1218,42 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// Preload Chinese voices (安卓微信可能不支持speechSynthesis)
+// Preload Chinese voices
 if (window.speechSynthesis) {
   speechSynthesis.onvoiceschanged = () => { getChineseVoice(); };
   speechSynthesis.getVoices();
 }
 
-// 安卓微信音频解锁：首次触摸时解锁后续播放权限
-if (isAndroid()) {
-  // 安卓微信X5内核音频解锁：首次触摸时播放一段无声音频来激活音频通道
-  // 关键：用DOM audio元素（不是new Audio()），不设crossOrigin
+// 安卓微信音频解锁：通过WeixinJSBridge激活音频通道
+if (isAndroid() && isWeChat()) {
+  ttsLog('安卓微信环境，准备音频解锁');
   let audioUnlocked = false;
-  function unlockAudio() {
+
+  function unlockViaWX() {
     if (audioUnlocked) return;
     audioUnlocked = true;
-    try {
-      const a = ensureAudioElement();
-      // 加载一段极短的静音音频来解锁X5的音频播放通道
-      a.src = 'data:audio/mp3;base64,SUQzBAAAAAABEVRYWFgAAAAtAAABYwAAAABEVRYWFgAAAAtAAAAZgAAAABEVRYWFgAAAAtAAABYwAAAABEVRYWFgAAAAtAAABYwAAAABEVRYWFgAAAAtAAABYwAAAABEVRYWFgAAAAtAAABYwAAAABEVRYWFgAAAAtAAABYwAAAABEVRYWFgAAAAtAAAAZgAAAP//7kQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
-      a.play().then(() => {
-        a.pause();
-        a.removeAttribute('src');
-        a.load();
-      }).catch(() => {
-        // 即使解锁失败也清除src
-        a.removeAttribute('src');
-        a.load();
+    ttsLog('WeixinJSBridge音频解锁触发');
+    if (typeof WeixinJSBridge !== 'undefined') {
+      WeixinJSBridge.invoke('getNetworkType', {}, function() {
+        ttsLog('音频通道已解锁（WeixinJSBridge）');
+        const a = ensureAudioElement();
+        a.src = 'data:audio/mp3;base64,SUQzBAAAAAAAIEVRYWFgAAAAtAAABYwAAAABEVRYWFgAAAAtAAAAZgAAAABEVRYWFgAAAAtAAABYwAAAABEVRYWFgAAAAtAAABYwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
+        a.play().then(() => { ttsLog('解锁play成功'); a.pause(); a.removeAttribute('src'); a.load(); }).catch((e) => { ttsLog('解锁play失败:' + e.name); a.removeAttribute('src'); a.load(); });
       });
-    } catch(e) {}
+    }
   }
-  // 用touchstart和click双重保障
-  document.addEventListener('touchstart', unlockAudio, {once:true, capture:true});
-  document.addEventListener('click', unlockAudio, {once:true, capture:true});
-  // 也在DOMContentLoaded时尝试（某些X5版本允许非交互初始化）
-  if (document.readyState === 'complete') unlockAudio();
-  else document.addEventListener('DOMContentLoaded', unlockAudio, {once:true});
+
+  if (typeof WeixinJSBridge !== 'undefined') {
+    unlockViaWX();
+  } else {
+    document.addEventListener('WeixinJSBridgeReady', function() {
+      ttsLog('WeixinJSBridgeReady事件触发');
+      unlockViaWX();
+    }, { once: true });
+  }
+
+  document.addEventListener('touchstart', function() { if (!audioUnlocked) unlockViaWX(); }, { once: true, capture: true });
+  document.addEventListener('click', function() { if (!audioUnlocked) unlockViaWX(); }, { once: true, capture: true });
 }
 
 init();
